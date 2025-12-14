@@ -1,88 +1,169 @@
-import { Text, TouchableOpacity, View, FlatList } from "react-native";
-import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
+import { View, FlatList } from "react-native";
+import { useMemo, useState } from "react";
 import Container from "@/src/components/Container";
 
+import { Header } from "@/src/components/dashboard/Header";
+import { PeriodSelector } from "@/src/components/dashboard/PeriodSeletor";
+import { BalanceCard } from "@/src/components/dashboard/BalanceCard";
+import { SummaryCards } from "@/src/components/dashboard/SummaryCards";
+import { MostUsedCategory } from "@/src/components/dashboard/MostUsedCategory";
+import ActionsModal from "@/src/components/dashboard/ActionsModal";
+import { AddTransactionModal } from "@/src/components/dashboard/AddTransictionModal";
+import { FixedExpensesCard } from "@/src/components/dashboard/FixesExpensesCard";
+import { ProjectionCard } from "@/src/components/dashboard/ProjectionCard";
+import { CategoryChartPlaceholder } from "@/src/components/dashboard/CategoryChartPlaceholder";
+import { InsightsCard } from "@/src/components/dashboard/InsightCard";
+import { TransactionItem } from "@/src/components/dashboard/TransactionItem";
+
+type Transaction = {
+  id: string;
+  title: string;
+  value: number;
+  type: "INCOME" | "EXPENSE";
+  category: string;
+  isFixed: boolean;
+};
+
+const INITIAL_CATEGORIES = [
+  "Alimentação",
+  "Transporte",
+  "Lazer",
+  "Moradia",
+  "Saúde",
+  "Trabalho",
+];
+
 export default function Dashboard() {
-  const transactions = [
-    { id: "1", title: "Salário", value: 3500, type: "INCOME" },
-    { id: "2", title: "Mercado", value: 120.5, type: "EXPENSE" },
-    { id: "3", title: "Netflix", value: 39.9, type: "EXPENSE" },
-  ];
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState<"INCOME" | "EXPENSE">("INCOME");
+  const [categories, setCategories] = useState(INITIAL_CATEGORIES);
+
+  const [transactions, setTransactions] = useState<Transaction[]>([
+    {
+      id: "1",
+      title: "Salário",
+      value: 3500,
+      type: "INCOME",
+      category: "Trabalho",
+      isFixed: true,
+    },
+    {
+      id: "2",
+      title: "Mercado",
+      value: 120.5,
+      type: "EXPENSE",
+      category: "Alimentação",
+      isFixed: false,
+    },
+    {
+      id: "3",
+      title: "Netflix",
+      value: 39.9,
+      type: "EXPENSE",
+      category: "Lazer",
+      isFixed: true,
+    },
+    {
+      id: "4",
+      title: "Uber",
+      value: 45,
+      type: "EXPENSE",
+      category: "Transporte",
+      isFixed: false,
+    },
+  ]);
+
+  const mostUsedCategory = useMemo(() => {
+    const totals: Record<string, number> = {};
+    transactions
+      .filter((t) => t.type === "EXPENSE")
+      .forEach((t) => {
+        totals[t.category] = (totals[t.category] || 0) + t.value;
+      });
+
+    return Object.entries(totals).sort((a, b) => b[1] - a[1])[0];
+  }, [transactions]);
+
+  const incomeTotal = useMemo(
+    () =>
+      transactions
+        .filter((t) => t.type === "INCOME")
+        .reduce((acc, t) => acc + t.value, 0),
+    [transactions]
+  );
+
+  const expenseTotal = useMemo(
+    () =>
+      transactions
+        .filter((t) => t.type === "EXPENSE")
+        .reduce((acc, t) => acc + t.value, 0),
+    [transactions]
+  );
+
+  const balance = incomeTotal - expenseTotal;
+
+  function openModal(type: "INCOME" | "EXPENSE") {
+    setModalType(type);
+    setModalVisible(true);
+  }
 
   return (
     <Container>
-      <View className="flex-1 justify-between">
-        {/* Header */}
-        <View className="mt-10">
-          <Text className="text-gray-500">Olá,</Text>
-          <Text className="text-2xl font-semibold text-gray-900">
-            Fabricio 👋
-          </Text>
-        </View>
+      <FlatList
+        data={transactions}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => <TransactionItem transaction={item} />}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 120 }}
+        ListHeaderComponent={
+          <View>
+            <Header />
 
-        {/* Saldo */}
-        <View className="mt-6 bg-white rounded-2xl p-6">
-          <Text className="text-gray-500">Saldo atual</Text>
-          <Text className="text-3xl font-bold text-gray-900 mt-2">
-            R$ 3.339,60
-          </Text>
-        </View>
+            <PeriodSelector
+              period="Abril"
+              onNext={() => {}}
+              onPrev={() => {}}
+            />
 
-        {/* Resumo */}
-        <View className="flex-row justify-between mt-4 gap-4">
-          <View className="flex-1 bg-white rounded-2xl p-4">
-            <View className="flex-row items-center gap-2 mb-2">
-              <FontAwesome5 name="arrow-up" size={14} color="#16A34A" />
-              <Text className="text-gray-500 text-sm">Entradas</Text>
-            </View>
-            <Text className="text-lg font-semibold text-green-600">
-              R$ 3.500,00
-            </Text>
+            <BalanceCard balance={balance.toFixed(2)} />
+
+            <SummaryCards income={incomeTotal} expense={expenseTotal} />
+
+            <MostUsedCategory data={mostUsedCategory} />
+
+            <FixedExpensesCard transactions={transactions} />
+            <ProjectionCard transactions={transactions} />
+            <CategoryChartPlaceholder />
+            <InsightsCard transactions={transactions} />
+
+            <ActionsModal
+              onIncome={() => openModal("INCOME")}
+              onExpense={() => openModal("EXPENSE")}
+            />
           </View>
+        }
+      />
 
-          <View className="flex-1 bg-white rounded-2xl p-4">
-            <View className="flex-row items-center gap-2 mb-2">
-              <FontAwesome5 name="arrow-down" size={14} color="#DC2626" />
-              <Text className="text-gray-500 text-sm">Saídas</Text>
-            </View>
-            <Text className="text-lg font-semibold text-red-600">
-              R$ 160,40
-            </Text>
-          </View>
-        </View>
+      <AddTransactionModal
+        visible={modalVisible}
+        type={modalType}
+        categories={categories}
+        onClose={() => setModalVisible(false)}
+        onSubmit={(data) => {
+          setTransactions((prev) => [
+            ...prev,
+            {
+              id: crypto.randomUUID(),
+              type: modalType,
+              ...data,
+            },
+          ]);
 
-        {/* Ação */}
-        <TouchableOpacity className="bg-blue-600 h-14 rounded-xl flex-row items-center justify-center mt-6">
-          <FontAwesome5 name="plus" size={16} color="#fff" />
-          <Text className="text-white text-base font-semibold ml-2">
-            Nova transação
-          </Text>
-        </TouchableOpacity>
-
-        {/* Últimas transações */}
-        <View className="mt-8 flex-1">
-          <Text className="text-lg font-semibold mb-4">Últimas transações</Text>
-
-          <FlatList
-            data={transactions}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View className="bg-white rounded-xl p-4 mb-3 flex-row justify-between items-center">
-                <Text className="text-gray-900">{item.title}</Text>
-                <Text
-                  className={
-                    item.type === "INCOME"
-                      ? "text-green-600 font-semibold"
-                      : "text-red-600 font-semibold"
-                  }
-                >
-                  {item.type === "INCOME" ? "+" : "-"} R$ {item.value}
-                </Text>
-              </View>
-            )}
-          />
-        </View>
-      </View>
+          if (!categories.includes(data.category)) {
+            setCategories((prev) => [...prev, data.category]);
+          }
+        }}
+      />
     </Container>
   );
 }
