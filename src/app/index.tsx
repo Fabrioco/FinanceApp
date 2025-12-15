@@ -27,7 +27,7 @@ export default function Index() {
         <View className="px-6 mb-10">
           <TouchableOpacity
             className="bg-blue-600 h-14 rounded-xl flex-row items-center justify-center"
-            onPress={() => router.push("/auth/login")}
+            onPress={() => router.push("/auth/register")}
           >
             <Text className="text-white text-base font-semibold mr-2">
               Começar
