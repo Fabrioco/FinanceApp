@@ -7,6 +7,7 @@ import {
   Pressable,
   TextInput,
   Animated,
+  Alert,
 } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import Container from "@/src/components/Container";
@@ -88,6 +89,8 @@ export default function GoalsScreen() {
   const [showCongratsModal, setShowCongratsModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
 
   const congratsScale = useRef(new Animated.Value(0.8)).current;
   const congratsOpacity = useRef(new Animated.Value(0)).current;
@@ -221,6 +224,36 @@ export default function GoalsScreen() {
       congratsOpacity.setValue(0);
     }
   }, [showCongratsModal, congratsScale, congratsOpacity]);
+
+  function handleWithdraw() {
+    if (!selectedGoal || !withdrawAmount) return;
+
+    const value = Number(withdrawAmount);
+    if (value <= 0) return;
+
+    if (value > selectedGoal.current) {
+      Alert.alert("Valor inválido", "Você não tem esse valor disponível.");
+      return;
+    }
+
+    setGoals((prev) =>
+      prev.map((g) => {
+        if (g.id !== selectedGoal.id) return g;
+
+        const newCurrent = Math.max(0, g.current - value);
+
+        return {
+          ...g,
+          current: newCurrent,
+          isCompleted: newCurrent >= g.target,
+          completedAt: newCurrent < g.target ? undefined : g.completedAt,
+        };
+      })
+    );
+
+    setWithdrawAmount("");
+    setShowWithdrawModal(false);
+  }
 
   /* =======================
      RENDER
@@ -547,6 +580,20 @@ export default function GoalsScreen() {
               <Text className="text-base font-medium">Editar meta</Text>
             </TouchableOpacity>
 
+            {/* RETIRAR VALOR */}
+            <TouchableOpacity
+              className="flex-row items-center gap-3 p-4 rounded-xl active:bg-gray-100"
+              onPress={() => {
+                setShowActionsModal(false);
+                setShowWithdrawModal(true);
+              }}
+            >
+              <View className="w-10 h-10 rounded-full bg-red-100 items-center justify-center">
+                <Feather name="minus-circle" size={18} color="#EF4444" />
+              </View>
+              <Text className="text-base font-medium">Retirar valor</Text>
+            </TouchableOpacity>
+
             {/* EXCLUIR */}
             <TouchableOpacity
               className="flex-row items-center gap-3 p-4 rounded-xl"
@@ -633,6 +680,38 @@ export default function GoalsScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      <Modal transparent visible={showWithdrawModal} animationType="slide">
+        <Text className="text-gray-400 text-sm mb-2">
+          Disponível: R$ {selectedGoal?.current.toFixed(2)}
+        </Text>
+
+        <Pressable
+          className="flex-1 bg-black/20 justify-end"
+          onPress={() => setShowWithdrawModal(false)}
+        >
+          <Pressable className="bg-white rounded-t-3xl p-6" onPress={() => {}}>
+            <Text className="text-lg font-semibold mb-4">Retirar valor</Text>
+
+            <TextInput
+              placeholder="Valor para retirar"
+              keyboardType="numeric"
+              value={withdrawAmount}
+              onChangeText={setWithdrawAmount}
+              className="bg-gray-100 rounded-xl px-4 py-3 mb-4"
+            />
+
+            <TouchableOpacity
+              className="bg-red-500 rounded-xl py-3"
+              onPress={handleWithdraw}
+            >
+              <Text className="text-white text-center font-semibold">
+                Confirmar retirada
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
     </Container>
   );
