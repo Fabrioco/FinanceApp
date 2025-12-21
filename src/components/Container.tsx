@@ -1,8 +1,18 @@
 import { ReactNode } from "react";
 import { View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-export default function Container({ children }: { children: ReactNode }) {
+type Props = {
+  children: ReactNode;
+};
+
+export default function Container({ children }: Props) {
   return (
-    <View className="flex-1 bg-gray-100 justify-center px-6">{children}</View>
+    <SafeAreaView
+      edges={["top"]}
+      className="flex-1 bg-gray-100"
+    >
+      <View className="flex-1 px-6">{children}</View>
+    </SafeAreaView>
   );
 }
