@@ -11,7 +11,7 @@ import {
   Alert,
   Dimensions,
 } from "react-native";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Feather from "@expo/vector-icons/Feather";
 import Container from "@/src/components/Container";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -41,6 +41,11 @@ type Transaction = {
 
 type Filter = "ALL" | "INCOME" | "EXPENSE";
 
+type CategorySummary = {
+  category: string;
+  total: number;
+};
+
 /* =======================
    MOCK
 ======================= */
@@ -67,6 +72,93 @@ function formatDateLabel(date: string) {
   if (d.toDateString() === yesterday.toDateString()) return "Ontem";
 
   return d.toLocaleDateString("pt-BR");
+}
+
+type TransactionKind = "NORMAL" | "FIXED_ROOT" | "RECURRING" | "INSTALLMENT";
+
+function getTransactionKind(t: Transaction): TransactionKind {
+  if (t.isInstallment) return "INSTALLMENT";
+  if (t.originId) return "RECURRING";
+  if (t.isFixed) return "FIXED_ROOT";
+  return "NORMAL";
+}
+
+type Action = {
+  text: string;
+  style?: "default" | "cancel" | "destructive";
+  onPress?: () => void;
+};
+
+function buildTransactionActions(
+  t: Transaction,
+  helpers: {
+    openEdit: (t: Transaction) => void;
+    openEditFixed: (id: string) => void;
+    openEditAllInstallments: (t: Transaction) => void;
+    deleteSingle: (id: string) => void;
+    deleteFixed: (id: string) => void;
+    deleteAllInstallments: (parentId: string) => void;
+  }
+): Action[] {
+  switch (getTransactionKind(t)) {
+    case "NORMAL":
+      return [
+        { text: "Editar", onPress: () => helpers.openEdit(t) },
+        {
+          text: "Apagar",
+          style: "destructive",
+          onPress: () => helpers.deleteSingle(t.id),
+        },
+      ];
+
+    case "FIXED_ROOT":
+      return [
+        { text: "Editar recorrência", onPress: () => helpers.openEdit(t) },
+        {
+          text: "Apagar recorrência",
+          style: "destructive",
+          onPress: () => helpers.deleteFixed(t.id),
+        },
+      ];
+
+    case "RECURRING":
+      return [
+        { text: "Editar este mês", onPress: () => helpers.openEdit(t) },
+        {
+          text: "Editar todos",
+          onPress: () => helpers.openEditFixed(t.originId!),
+        },
+        {
+          text: "Apagar este mês",
+          style: "destructive",
+          onPress: () => helpers.deleteSingle(t.id),
+        },
+        {
+          text: "Apagar todos",
+          style: "destructive",
+          onPress: () => helpers.deleteFixed(t.originId!),
+        },
+      ];
+
+    case "INSTALLMENT":
+      return [
+        { text: "Editar esta parcela", onPress: () => helpers.openEdit(t) },
+        {
+          text: "Editar todas",
+          onPress: () => helpers.openEditAllInstallments(t),
+        },
+        {
+          text: "Apagar esta parcela",
+          style: "destructive",
+          onPress: () => helpers.deleteSingle(t.id),
+        },
+        {
+          text: "Apagar todas",
+          style: "destructive",
+          onPress: () => helpers.deleteAllInstallments(t.parentId!),
+        },
+      ];
+  }
 }
 
 /* =======================
@@ -119,6 +211,8 @@ export default function TransactionsScreen() {
   const [isInstallment, setIsInstallment] = useState(false);
   const [installments, setInstallments] = useState("2");
 
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+
   /* =======================
      COMPUTED
   ======================= */
@@ -128,15 +222,37 @@ export default function TransactionsScreen() {
     );
   }, [categoryInput, categories]);
 
-  const filteredTransactions = useMemo(() => {
+  const baseTransactions = useMemo(() => {
     const withFixed = replicateFixed(transactions, currentMonth);
+    return withFixed.filter((t) => isSameMonth(t.date, currentMonth));
+  }, [transactions, currentMonth]);
 
-    const monthly = withFixed.filter((t) => isSameMonth(t.date, currentMonth));
+  const baseByType = useMemo(() => {
+    if (filter === "ALL") return baseTransactions;
 
-    if (filter === "ALL") return monthly;
+    return baseTransactions.filter((t) => t.type === filter);
+  }, [baseTransactions, filter]);
 
-    return monthly.filter((t) => t.type === filter);
-  }, [transactions, filter, currentMonth]);
+  const categoriesInMonth = useMemo(() => {
+    const set = new Set<string>();
+
+    baseByType.forEach((t) => {
+      set.add(t.category);
+    });
+
+    return Array.from(set);
+  }, [baseByType]);
+
+  const filteredTransactions = useMemo(() => {
+    const byType =
+      filter === "ALL"
+        ? baseTransactions
+        : baseTransactions.filter((t) => t.type === filter);
+
+    if (!categoryFilter) return byType;
+
+    return byType.filter((t) => t.category === categoryFilter);
+  }, [baseTransactions, filter, categoryFilter]);
 
   const summaryTransactions = useMemo(() => {
     return filteredTransactions.filter((t) => {
@@ -187,23 +303,21 @@ export default function TransactionsScreen() {
     };
   }, [summaryTransactions]);
 
-  const expensesByCategory = useMemo(() => {
-    const map: Record<string, number> = {};
+  const summaryByCategory = useMemo(() => {
+    const map = new Map<string, number>();
 
-    summaryTransactions
-      .filter((t) => t.type === "EXPENSE")
-      .forEach((t) => {
-        map[t.category] = (map[t.category] || 0) + t.value;
-      });
+    baseByType.forEach((t) => {
+      map.set(t.category, (map.get(t.category) || 0) + t.value);
+    });
 
-    return Object.entries(map).map(([name, value]) => ({
-      name,
-      value,
-      color: categoryColor(name),
+    return Array.from(map.entries()).map(([category, total]) => ({
+      name: category,
+      value: total,
+      color: categoryColor(category),
       legendFontColor: "#374151",
       legendFontSize: 12,
     }));
-  }, [summaryTransactions]);
+  }, [baseByType]);
 
   /* =======================
      ACTIONS
@@ -215,74 +329,18 @@ export default function TransactionsScreen() {
   }
 
   function openActions(transaction: Transaction) {
-    // PARCELADA
-    if (transaction.isInstallment && transaction.parentId) {
-      Alert.alert("Parcela", "O que deseja fazer?", [
-        {
-          text: "Editar só esta parcela",
-          onPress: () => openEdit(transaction),
-        },
-        {
-          text: "Editar todas",
-          onPress: () => openEditFixed(transaction.originId!),
-        },
-        {
-          text: "Apagar só esta",
-          style: "destructive",
-          onPress: () => deleteSingle(transaction.id),
-        },
-        {
-          text: "Apagar todas",
-          style: "destructive",
-          onPress: () => {
-            if (transaction.parentId) deleteFixed(transaction.parentId);
-          },
-        },
-        { text: "Cancelar", style: "cancel" },
-      ]);
-      return;
-    }
+    const actions = buildTransactionActions(transaction, {
+      openEdit,
+      openEditFixed,
+      openEditAllInstallments,
+      deleteSingle,
+      deleteFixed,
+      deleteAllInstallments,
+    });
 
-    // FIXA (projeção mensal)
-    if (transaction.originId) {
-      Alert.alert("Transação fixa", "O que deseja fazer?", [
-        {
-          text: "Editar só este mês",
-          onPress: () => openEdit(transaction),
-        },
-        {
-          text: "Editar todas",
-          onPress: () => {
-            if (transaction.originId) openEditAllInstallments(transaction);
-          },
-        },
-        {
-          text: "Apagar só este mês",
-          style: "destructive",
-          onPress: () => deleteSingle(transaction.id),
-        },
-        {
-          text: "Apagar todas",
-          style: "destructive",
-          onPress: () => {
-            if (transaction.originId)
-              deleteAllInstallments(transaction.originId);
-          },
-        },
-        { text: "Cancelar", style: "cancel" },
-      ]);
-      return;
-    }
-
-    // NORMAL
     Alert.alert("Transação", "O que deseja fazer?", [
-      { text: "Editar", onPress: () => openEdit(transaction) },
-      {
-        text: "Apagar",
-        style: "destructive",
-        onPress: () => deleteSingle(transaction.id),
-      },
-      { text: "Cancelar", style: "cancel" },
+      ...actions,
+      { text: "Cancelar", style: "cancel" }, // 👈 SEMPRE aqui
     ]);
   }
 
@@ -460,6 +518,25 @@ export default function TransactionsScreen() {
      HELPERS
   ======================== */
 
+  const categorySummary = useMemo<CategorySummary[]>(() => {
+    const map = new Map<string, number>();
+
+    baseByType.forEach((t) => {
+      map.set(t.category, (map.get(t.category) || 0) + t.value);
+    });
+
+    return Array.from(map.entries()).map(([category, total]) => ({
+      category,
+      total,
+    }));
+  }, [baseByType]);
+
+  const categoryAlreadyExists = useMemo(() => {
+    return categories.some(
+      (c) => c.toLowerCase() === categoryInput.toLowerCase()
+    );
+  }, [categories, categoryInput]);
+
   function isSameMonth(date: Date | string, base: Date) {
     const d = typeof date === "string" ? new Date(date) : date;
 
@@ -581,6 +658,12 @@ export default function TransactionsScreen() {
     });
   }
 
+  useEffect(() => {
+    if (categoryFilter && !categoriesInMonth.includes(categoryFilter)) {
+      setCategoryFilter(null);
+    }
+  }, [filter, categoriesInMonth, categoryFilter]);
+
   // function generateMonthlyTransactions(
   //   transactions: Transaction[],
   //   month: Date
@@ -618,6 +701,8 @@ export default function TransactionsScreen() {
   /* =======================
      RENDER
   ======================= */
+
+  console.log(categoriesInMonth);
   return (
     <Container>
       <View className="flex-1">
@@ -703,15 +788,20 @@ export default function TransactionsScreen() {
           </View>
         </View>
 
-        {/* GASTOS POR CATEGORIA */}
-        {expensesByCategory.length > 0 && (
+        {/* PIE CHART POR CATEGORIA */}
+        {/* PIE CHART POR CATEGORIA */}
+        {summaryByCategory.length > 1 && (
           <View className="bg-white rounded-xl p-4 mb-4">
             <Text className="text-gray-500 text-sm mb-2">
-              Gastos por categoria
+              {filter === "INCOME"
+                ? "Entradas por categoria"
+                : filter === "EXPENSE"
+                ? "Gastos por categoria"
+                : "Movimentações por categoria"}
             </Text>
 
             <PieChart
-              data={expensesByCategory}
+              data={summaryByCategory}
               width={Dimensions.get("window").width - 32}
               height={220}
               chartConfig={{
@@ -722,6 +812,55 @@ export default function TransactionsScreen() {
               paddingLeft="16"
               absolute
             />
+          </View>
+        )}
+
+        {/* FILTRO POR CATEGORIA */}
+        {categoriesInMonth.length > 0 && (
+          <View className="mt-3">
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 4 }}
+            >
+              {/* Todas */}
+              <TouchableOpacity
+                onPress={() => setCategoryFilter(null)}
+                className={`px-4 py-2 rounded-full mr-2 ${
+                  !categoryFilter ? "bg-blue-600" : "bg-gray-100"
+                }`}
+              >
+                <Text
+                  className={`text-sm ${
+                    !categoryFilter ? "text-white" : "text-gray-600"
+                  }`}
+                >
+                  Todas
+                </Text>
+              </TouchableOpacity>
+
+              {categoriesInMonth.map((cat) => {
+                const active = cat === categoryFilter;
+
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() => setCategoryFilter(active ? null : cat)}
+                    className={`px-4 py-2 rounded-full mr-2 ${
+                      active ? "bg-blue-600" : "bg-gray-100"
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm ${
+                        active ? "text-white" : "text-gray-600"
+                      }`}
+                    >
+                      {cat}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
         )}
 
@@ -761,7 +900,7 @@ export default function TransactionsScreen() {
                         {t.category}
                         {t.isInstallment &&
                           ` • Parcela ${t.installmentIndex}/${t.installmentTotal}`}
-                        {t.isFixed && " • Fixa"}
+                        {t.isFixed && " • Fixa é fixa"}
                         {t.originId && !t.isFixed && " • Recorrente"}
                       </Text>
 
@@ -831,12 +970,19 @@ export default function TransactionsScreen() {
               />
 
               {showCategoryList && (
-                <View className="bg-white border rounded-xl mt-2 max-h-40">
-                  <ScrollView keyboardShouldPersistTaps="handled">
+                <View
+                  className="bg-white border rounded-xl mt-2"
+                  style={{ maxHeight: 180 }} // 👈 trava a altura
+                >
+                  <ScrollView
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {/* Categorias existentes */}
                     {filteredCategories.map((cat) => (
                       <TouchableOpacity
                         key={cat}
-                        className="px-4 py-3 border-b"
+                        className="px-4 py-3 border-b border-gray-100"
                         onPress={() => {
                           setCategoryInput(cat);
                           setShowCategoryList(false);
@@ -845,6 +991,24 @@ export default function TransactionsScreen() {
                         <Text>{cat}</Text>
                       </TouchableOpacity>
                     ))}
+
+                    {/* ➕ Adicionar nova categoria */}
+                    {categoryInput.trim().length > 0 &&
+                      !categoryAlreadyExists && (
+                        <TouchableOpacity
+                          className="px-4 py-3 bg-blue-50"
+                          onPress={() => {
+                            const name = categoryInput.trim();
+                            setCategories((prev) => [...prev, name]);
+                            setCategoryInput(name);
+                            setShowCategoryList(false);
+                          }}
+                        >
+                          <Text className="text-blue-600 font-medium">
+                            ➕ Adicionar categoria "{categoryInput.trim()}"
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                   </ScrollView>
                 </View>
               )}

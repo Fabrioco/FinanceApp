@@ -49,6 +49,8 @@ export function AddTransactionModal({
       value: parsedValue,
       category: categoryInput,
       isFixed,
+      type,
+      date: new Date(),
     });
 
     setTitle("");
