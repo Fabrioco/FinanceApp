@@ -39,7 +39,10 @@ export default function Login() {
           </View>
 
           {/* Forgot password */}
-          <TouchableOpacity className="self-end">
+          <TouchableOpacity
+            className="self-end"
+            onPress={() => router.push("/noAuth/forgotPassword")}
+          >
             <Text className="text-sm text-blue-600">Esqueceu a senha?</Text>
           </TouchableOpacity>
 
