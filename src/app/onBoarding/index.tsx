@@ -36,26 +36,28 @@ export default function OnBoarding() {
 
   return (
     <Container>
-      {/* Progress */}
-      <View className="absolute top-16 w-full items-center">
-        <View className="flex-row gap-2 w-2/3">
-          {renderBar(progress1)}
-          {renderBar(progress2)}
-          {renderBar(progress3)}
+      <View className="flex-1 flex-col items-center justify-center">
+        {/* Progress */}
+        <View className="absolute top-16 w-full items-center">
+          <View className="flex-row gap-2 w-2/3">
+            {renderBar(progress1)}
+            {renderBar(progress2)}
+            {renderBar(progress3)}
+          </View>
         </View>
+
+        {/* Steps */}
+        {step === 1 && <OnBoardingStepOne onNext={() => setStep(2)} />}
+
+        {step === 2 && (
+          <OnBoardingStepTwo
+            onBack={() => setStep(1)}
+            onNext={() => setStep(3)}
+          />
+        )}
+
+        {step === 3 && <OnBoardingStepThree />}
       </View>
-
-      {/* Steps */}
-      {step === 1 && <OnBoardingStepOne onNext={() => setStep(2)} />}
-
-      {step === 2 && (
-        <OnBoardingStepTwo
-          onBack={() => setStep(1)}
-          onNext={() => setStep(3)}
-        />
-      )}
-
-      {step === 3 && <OnBoardingStepThree />}
     </Container>
   );
 }
