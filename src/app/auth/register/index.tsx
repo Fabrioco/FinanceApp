@@ -11,10 +11,12 @@ import {
   TouchableWithoutFeedback,
   View,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { Checkbox } from "expo-checkbox";
 import { useRef, useState } from "react";
 import Toast from "react-native-toast-message";
+import { Feather } from "@expo/vector-icons";
 
 export default function Register() {
   const [name, setName] = useState<string>("");
@@ -110,7 +112,7 @@ export default function Register() {
         type: "error",
         text1: "Algo deu errado",
         text2: "Tente novamente",
-      })
+      });
     } finally {
       setLoading(false);
     }
@@ -215,24 +217,43 @@ export default function Register() {
 
                   <View>
                     <Text className="text-sm text-gray-600 mb-1">Senha</Text>
-                    <TextInput
-                      placeholder="Digite sua senha"
-                      placeholderTextColor="#9CA3AF"
-                      secureTextEntry
-                      className={`w-full h-12 px-4 rounded-xl ${
+                    <View
+                      className={`w-full flex-row items-center h-12 px-4 rounded-xl ${
                         passwordError
                           ? "bg-red-100 border border-red-400"
                           : "bg-gray-100"
                       }`}
-                      textContentType="password"
-                      value={password}
-                      onChangeText={setPassword}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      ref={passwordRef}
-                      onSubmitEditing={handleRegister}
-                      returnKeyType="done"
-                    />
+                    >
+                      <TextInput
+                        placeholder="Digite sua senha"
+                        placeholderTextColor="#9CA3AF"
+                        secureTextEntry={showPassword}
+                        className="flex-1"
+                        textContentType="password"
+                        value={password}
+                        onChangeText={setPassword}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        ref={passwordRef}
+                        onSubmitEditing={handleRegister}
+                        returnKeyType="done"
+                      />
+                      {showPassword ? (
+                        <Feather
+                          name="eye"
+                          size={18}
+                          color="#9CA3AF"
+                          onPress={() => setShowPassword(false)}
+                        />
+                      ) : (
+                        <Feather
+                          name="eye-off"
+                          size={18}
+                          color="#9CA3AF"
+                          onPress={() => setShowPassword(true)}
+                        />
+                      )}
+                    </View>
                   </View>
 
                   <View
@@ -255,9 +276,13 @@ export default function Register() {
                     className="w-full bg-blue-600 h-12 rounded-xl justify-center items-center mt-2"
                     onPress={handleRegister}
                   >
-                    <Text className="text-white text-base font-semibold">
-                      Registrar
-                    </Text>
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text className="text-white text-base font-semibold">
+                        Registrar
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 </View>
 
