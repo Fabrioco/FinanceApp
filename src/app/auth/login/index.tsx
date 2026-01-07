@@ -56,7 +56,7 @@ export default function Login() {
         }
       );
 
-      if (response.status !== 200) {
+      if (!response.ok) {
         Toast.show({
           type: "error",
           text1: "Erro de conexão",
